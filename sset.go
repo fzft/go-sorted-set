@@ -1,72 +1,72 @@
 package go_sorted_set
 
-import (
-	"crypto/md5"
-	"hash"
-)
-
-type SortedSet struct {
-	skipList  *SkipList
-	hashTable map[string]int
-	hash      hash.Hash
+type ZrangeSpec struct {
+	Min, Max    int
+	Minx, Maxex bool // are min or max exclusive?
 }
 
-func NewSortedSet() *SortedSet {
-	return &SortedSet{
-		skipList:  newSkipList(),
-		hashTable: make(map[string]int),
-		hash:      md5.New(),
+type Zset struct {
+	dict     map[string]int
+	skiplist *SkipList
+}
+
+func New() *Zset {
+	return &Zset{dict: make(map[string]int), skiplist: newSkipList()}
+}
+
+func (s *Zset) ZAdd(key string, score int, member []byte) {
+	if _, ok := s.dict[string(member)]; ok {
+		s.ZRem(key, member)
 	}
+	s.dict[string(member)] = score
+	s.skiplist.Insert(score, member)
 }
 
-func (s *SortedSet) ZAdd(key string, score int, member []byte) {
-	s.hash.Write(member)
-	defer s.hash.Reset()
-	s.skipList.Insert(key, score, member)
-	s.hashTable[string(s.hash.Sum(nil))] = score
+// ZRangeByScore returns all nodes with score between Min and Max from the sorted set
+func (s *Zset) ZRangeByScore(min, max int) []*Node {
+	return s.skiplist.GetRangeByScore(ZrangeSpec{Min: min, Max: max})
 }
 
-func (s *SortedSet) ZRange(start, end int) []*Node {
-	return s.skipList.Search(start, end)
+// ZRangeByRank returns all nodes with rank between start and end from the sorted set
+func (s *Zset) ZRangeByRank(start, end int) []*Node {
+	return s.skiplist.GetRangeByRank(ZrangeSpec{Min: start, Max: end})
 }
 
-func (s *SortedSet) ZRem(_ string, member []byte) {
-	s.hash.Write(member)
-	defer s.hash.Reset()
-	if score, ok := s.hashTable[string(s.hash.Sum(nil))]; ok {
-		s.skipList.Delete(score, member)
+// ZRank returns the rank of the element with the given member in the sorted set
+func (s *Zset) ZRank(member []byte) int {
+	if score, ok := s.dict[string(member)]; ok {
+		return s.skiplist.GetRank(score, member)
 	}
+	return -1
 }
 
-func (s *SortedSet) ZRemRangeByScore(start, end int) []*Node {
-	nodes := s.skipList.DeleteByScoreRange(start, end)
-	for _, node := range nodes {
-		s.hash.Write(node.member)
-		delete(s.hashTable, string(s.hash.Sum(nil)))
-		s.hash.Reset()
+// ZRem removes the element with the given score and member from the sorted set
+func (s *Zset) ZRem(_ string, member []byte) bool {
+	if score, ok := s.dict[string(member)]; ok {
+		delete(s.dict, string(member))
+		s.skiplist.Delete(score, member)
+		return true
 	}
-	return nodes
+	return false
 }
 
-func (s *SortedSet) ZRemByScore(score int) []*Node {
-	nodes := s.skipList.DeleteByScore(score)
-	for _, node := range nodes {
-		s.hash.Write(node.member)
-		delete(s.hashTable, string(s.hash.Sum(nil)))
-		s.hash.Reset()
-	}
-	return nodes
+// ZRemRangeByScore deletes all nodes with score between Min and Max from the sorted set
+func (s *Zset) ZRemRangeByScore(min, max int) int {
+	return s.skiplist.DeleteRangeByScore(ZrangeSpec{Min: min, Max: max}, s.dict)
 }
 
-func (s *SortedSet) ZIncrBy(key string, score int, member []byte) {
-	s.hash.Write(member)
-	defer s.hash.Reset()
-	if oldScore, ok := s.hashTable[string(s.hash.Sum(nil))]; ok {
-		s.skipList.Delete(oldScore, member)
-		s.skipList.Insert(key, oldScore+score, member)
-		s.hashTable[string(s.hash.Sum(nil))] = oldScore + score
-	} else {
-		s.skipList.Insert(key, score, member)
-		s.hashTable[string(s.hash.Sum(nil))] = score
-	}
+// ZRemRangeByRank deletes all nodes with rank between start and end from the sorted set
+func (s *Zset) ZRemRangeByRank(start, end int) int {
+	return s.skiplist.DeleteRangeByRank(ZrangeSpec{Min: start, Max: end}, s.dict)
+}
+
+// ZCard returns the number of elements in the sorted set
+func (s *Zset) ZCard() int {
+	return s.skiplist.length
+}
+
+// ZScore returns the score of the element with the given member in the sorted set
+func (s *Zset) ZScore(member []byte) (score int, ok bool) {
+	score, ok = s.dict[string(member)]
+	return
 }

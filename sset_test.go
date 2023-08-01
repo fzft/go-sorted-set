@@ -1,49 +1,38 @@
 package go_sorted_set
 
-import "testing"
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
 func TestSortedSet(t *testing.T) {
-	s := NewSortedSet()
+	assert := assert.New(t)
 
-	// Test ZAdd
-	s.ZAdd("key1", 1, []byte("member1"))
-	s.ZAdd("key1", 2, []byte("member2"))
-	s.ZAdd("key1", 3, []byte("member3"))
+	zset := New()
 
-	// Test ZRange
-	nodes := s.ZRange(1, 3)
-	if len(nodes) != 3 {
-		t.Errorf("Expected 3 nodes, got %d", len(nodes))
-	}
+	// ZADD: Add elements to the zset
+	zset.ZAdd("key", 1, []byte("member1")) // Add "member1" with score 1
+	zset.ZAdd("key", 2, []byte("member2")) // Add "member2" with score 2
+	zset.ZAdd("key", 3, []byte("member3")) // Add "member3" with score 3
+	zset.ZAdd("key", 4, []byte("member4")) // Add "member4" with score 4
+	zset.ZAdd("key", 5, []byte("member5")) // Add "member5" with score 5
 
-	// Test ZRem
-	s.ZRem("key1", []byte("member1"))
-	nodes = s.ZRange(1, 3)
-	if len(nodes) != 2 {
-		t.Errorf("Expected 2 nodes, got %d", len(nodes))
-	}
+	// ZSCORE: Get the score of an element
+	score, ok := zset.ZScore([]byte("member3"))
+	assert.True(ok, "'member3' should exist in the zset")
+	assert.Equal(3, score, "Score of 'member3' should be 3")
 
-	// Test ZRemByScore
-	s.ZRemByScore(2)
-	nodes = s.ZRange(1, 3)
-	if len(nodes) != 1 {
-		t.Errorf("Expected 1 node, got %d", len(nodes))
-	}
+	// ZRANK: Retrieve the rank of an element
+	assert.Equal(3, zset.ZRank([]byte("member3")), "Rank of 'member3' should be 3")
 
-	// Test ZIncrBy
-	s.ZIncrBy("key1", 1, []byte("member3"))
-	nodes = s.ZRange(1, 4)
-	if len(nodes) != 1 {
-		t.Errorf("Expected 1 node, got %d", len(nodes))
-	}
-	if nodes[0].score != 4 {
-		t.Errorf("Expected score 4, got %d", nodes[0].score)
-	}
+	// ZRANGEBYSCORE: Retrieve elements within a score range
+	range1 := zset.ZRangeByScore(2, 4) // Retrieve elements with scores 2 to 4
+	assert.Equal(3, len(range1), "There should be 3 elements with scores between 2 and 4")
 
-	// Test ZRemRangeByScore
-	s.ZRemRangeByScore(1, 4)
-	nodes = s.ZRange(1, 4)
-	if len(nodes) != 0 {
-		t.Errorf("Expected 0 nodes, got %d", len(nodes))
-	}
+	// ZREMRANGEBYRANK: Remove elements within a rank range
+	removed := zset.ZRemRangeByRank(2, 4) // Remove elements with ranks 2 to 4
+	assert.Equal(3, removed, "Should have removed 3 elements")
+
+	// ZCARD: Get the number of elements in the zset
+	assert.Equal(2, zset.ZCard(), "Zset should have 2 elements after removal")
 }
